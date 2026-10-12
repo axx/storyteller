@@ -85,12 +85,24 @@ test('desktop and mobile layouts fit and expose working controls', async ({ page
   await expect(page.locator('#chapter-loader')).toHaveCount(0);
   await expect(page.locator('#next-chapter')).toBeVisible();
   await expect(page.locator('#next-chapter').locator('xpath=..')).toHaveClass(/transport/);
+  await expect(page.locator('.playback-bar #import')).toBeVisible();
+  await expect(page.locator('.playback-bar #theme')).toBeVisible();
+  await expect(page.locator('.playback-bar #source')).toBeVisible();
+  await expect(page.locator('.topbar #import, .topbar #theme, .topbar #source')).toHaveCount(0);
   await page.screenshot({ path: 'test-results/reader-desktop.png', fullPage: true });
   for (const width of [1440, 1024, 900, 768, 651, 650, 390, 320]) {
     await page.setViewportSize({ width, height: 850 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Next chapter' })).toBeVisible();
+    await expect(page.locator('.playback-bar #import')).toBeVisible();
+    await expect(page.locator('.playback-bar #theme')).toBeVisible();
+    await expect(page.locator('.playback-bar #source')).toBeVisible();
+    const centerOffset = await page.locator('.playback-center').evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      return Math.abs(bounds.left + bounds.width / 2 - window.innerWidth / 2);
+    });
+    expect(centerOffset).toBeLessThan(1);
     const title = await page.locator('#chapter-title').boundingBox();
     const paragraph = await page.locator('[data-paragraph="0"]').boundingBox();
     expect(title!.y + title!.height).toBeLessThan(paragraph!.y);

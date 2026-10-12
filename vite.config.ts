@@ -3,6 +3,9 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   base: './',
   build: {
+    modulePreload: {
+      resolveDependencies: () => [],
+    },
     rollupOptions: {
       input: { player: 'index.html', popup: 'popup.html', background: 'src/background.ts' },
       output: {
