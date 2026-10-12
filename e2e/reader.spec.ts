@@ -77,6 +77,23 @@ test('renders separator-only paragraphs as visual story breaks and skips them in
   expect(spoken).toEqual(['Before the break.', 'After the break.']);
 });
 
+test('scrolls to the top when a different chapter is loaded', async ({ page, context }) => {
+  await mockSpeech(context);
+  await page.goto('/?demo');
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('storyteller') || '{}');
+    saved.chapter = { ...saved.chapter, id: 'next-chapter', title: 'The Next Chapter' };
+    localStorage.setItem('storyteller', JSON.stringify(saved));
+    window.dispatchEvent(new StorageEvent('storage'));
+  });
+
+  await expect(page.locator('#chapter-title')).toHaveText('The Next Chapter');
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test('desktop and mobile layouts fit and expose working controls', async ({ page, context }) => {
   await mockSpeech(context);
   await page.goto('/?demo');
@@ -194,5 +211,14 @@ test('unpacked extension worker opens one player and restores storage', async ()
     const denied = await player.evaluate(() => chrome.runtime.sendMessage({ target: 'worker', type: 'READ_PAGE', mode: 'article' }));
     expect(denied.ok).toBe(false);
     expect(denied.error).toContain('Open a web novel page');
+
+    await player.evaluate(chapter => chrome.storage.local.set({ chapter: { ...chapter, id: `${chapter.id}-next`, sourceUrl: 'http://127.0.0.1:5173/', nextUrl: 'http://127.0.0.1:5173/?demo' } }), demoChapter);
+    await expect(player.getByRole('button', { name: 'Next chapter' })).toBeEnabled();
+    const tabCount = await player.evaluate(async () => (await chrome.tabs.query({})).length);
+    const nextChapter = await player.evaluate(() => chrome.runtime.sendMessage({ target: 'worker', type: 'OPEN_NEXT_CHAPTER' }));
+    expect(nextChapter.ok).toBe(false);
+    expect(nextChapter.error).toBeTruthy();
+    expect(await player.evaluate(async () => (await chrome.tabs.query({})).length)).toBe(tabCount);
+    await expect(player.locator('#chapter-title')).toHaveText('The Last Light');
   } finally { await context.close(); }
 });

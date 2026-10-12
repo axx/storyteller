@@ -10,7 +10,7 @@ export interface PlayerStatus {
 
 export type WorkerRequest =
   | { target: 'worker'; type: 'READ_PAGE'; mode: Chapter['mode'] }
-  | { target: 'worker'; type: 'OPEN_PLAYER' | 'GET_STATUS' | 'PAUSE' };
+  | { target: 'worker'; type: 'OPEN_PLAYER' | 'OPEN_NEXT_CHAPTER' | 'GET_STATUS' | 'PAUSE' };
 
 export type PlayerRequest = { target: 'player'; type: 'LOAD_CHAPTER' | 'GET_STATUS' | 'PAUSE' };
 
