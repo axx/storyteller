@@ -1,3 +1,4 @@
+import { hasReadableText } from './model';
 import type { Chapter } from './model';
 
 export interface Chunk {
@@ -10,6 +11,7 @@ export type PlaybackState = 'idle' | 'playing' | 'paused' | 'completed' | 'error
 export function makeChunks(paragraphs: string[]): Chunk[] {
   const segmenter = new Intl.Segmenter(undefined, { granularity: 'sentence' });
   return paragraphs.flatMap((paragraph, paragraphIndex) => {
+    if (!hasReadableText(paragraph)) return [];
     const chunks: Chunk[] = [];
     for (const { segment } of segmenter.segment(paragraph)) {
       let current = '';
@@ -90,7 +92,13 @@ export class Narrator {
   }
 
   seekParagraph(paragraphIndex: number) {
-    const target = this.chunks.findIndex(chunk => chunk.paragraphIndex === paragraphIndex);
+    const currentParagraph = this.chunks[this.chunkIndex]?.paragraphIndex ?? this.chunks.at(-1)?.paragraphIndex ?? -1;
+    let target = this.chunks.findIndex(chunk => chunk.paragraphIndex === paragraphIndex);
+    if (target < 0 && paragraphIndex > currentParagraph) {
+      target = this.chunks.findIndex(chunk => chunk.paragraphIndex > currentParagraph && chunk.paragraphIndex >= paragraphIndex);
+    } else if (target < 0 && paragraphIndex < currentParagraph) {
+      target = this.chunks.findLastIndex(chunk => chunk.paragraphIndex < currentParagraph && chunk.paragraphIndex <= paragraphIndex);
+    }
     if (target < 0) return;
     const wasPlaying = this.state === 'playing';
     this.cancel();
