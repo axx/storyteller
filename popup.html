@@ -5,8 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StoryTeller</title>
   </head>
-  <body>
-    <div id="app"></div>
+  <body class="popup-body">
+    <div class="popup">
+      <header class="popup-header">
+        <span class="brand">
+          <span class="brand-mark"><i data-lucide="book-open"></i></span>
+          StoryTeller
+        </span>
+        <span class="popup-badge">CHAPTER READER</span>
+      </header>
+
+      <div class="popup-intro">
+        <h1>A page. A voice.</h1>
+      </div>
+
+      <button id="read-page" class="primary-button">
+        <i data-lucide="headphones"></i>
+        Read current page
+      </button>
+      <button id="read-selection" class="secondary-button">
+        <i data-lucide="file-text"></i>
+        Read selected text
+      </button>
+
+      <div id="popup-error" class="popup-error" role="alert" hidden></div>
+
+      <div class="popup-current">
+        <span class="section-label">LAST OPENED</span>
+        <h2 id="saved-title">No chapter yet</h2>
+        <span id="saved-state" class="muted">Nothing queued</span>
+        <div class="popup-current-actions">
+          <button id="open-player" class="text-button">
+            Open reader <i data-lucide="arrow-up-right"></i>
+          </button>
+          <button
+            id="pause"
+            class="icon-button"
+            aria-label="Pause narration"
+            title="Pause narration"
+            hidden
+          >
+            <i data-lucide="pause"></i>
+          </button>
+        </div>
+      </div>
+
+      <footer class="popup-footer">
+        <span class="privacy-dot"></span>
+        Saved on this device
+      </footer>
+    </div>
     <script type="module" src="/src/popup.ts"></script>
   </body>
 </html>
