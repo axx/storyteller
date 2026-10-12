@@ -1,14 +1,14 @@
 import { element, refreshIcons } from './ui';
 import { Narrator } from './narration';
 import { getSaved, isExtension, saveChapter, writeStorage } from './storage';
-import { defaultPreferences, isChapter } from './model';
+import { defaultPreferences, hasReadableText, isChapter } from './model';
 import type { Chapter, Preferences } from './model';
 import type { PlayerStatus } from './protocol';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="reader-shell">
     <aside class="sidebar">
-      <a class="brand" href="index.html"><span class="brand-mark"><i data-lucide="book-open"></i></span>folio<span class="brand-dot">.</span></a>
+      <a class="brand" href="index.html"><span class="brand-mark"><i data-lucide="book-open"></i></span>StoryTeller</a>
       <div class="section-label">YOUR READING SPACE</div>
       <div class="nav-item"><i data-lucide="headphones"></i> Now reading <span class="live-dot"></span></div>
       <div class="sidebar-chapter" id="sidebar-chapter" hidden><span class="section-label">CURRENT CHAPTER</span><h2 id="sidebar-title"></h2><p id="sidebar-source"></p><div class="sidebar-progress"><span id="sidebar-percent">0%</span><span>read</span></div><div class="meter"><span id="sidebar-meter"></span></div></div>
@@ -22,7 +22,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </main>
     <aside class="settings-panel"><div class="section-label">LISTENING</div><h2>Make it yours.</h2><label for="voice">Narrator</label><select id="voice"><option value="">System default</option></select><p id="voice-info" class="muted">Loading voices...</p><div class="setting-heading"><label for="rate">Playback speed</label><output id="rate-label">1.0&times;</output></div><input id="rate" type="range" min="0.5" max="2" step="0.1" value="1" /><div class="range-labels"><span>0.5&times;</span><span>2.0&times;</span></div><div class="settings-rule"></div><div class="section-label">READING</div><label for="font-size" class="font-label">Text size</label><div class="setting-heading"><span class="small-a">A</span><input id="font-size" type="range" min="16" max="28" step="1" value="20" aria-label="Text size" /><span class="large-a">A</span></div><div class="settings-rule"></div><div class="position-summary"><i data-lucide="file-text"></i><span id="position-summary">No chapter loaded</span></div></aside>
   </div>
-  <footer class="playback-bar"><div class="playback-title"><span class="audio-mark"><i data-lucide="volume-2"></i></span><div><strong id="playing-title">Nothing queued</strong><span id="playback-status" role="status">Ready when you are</span></div></div><div class="playback-center"><div class="transport"><button id="previous" class="icon-button" title="Previous paragraph" aria-label="Previous paragraph" disabled><i data-lucide="skip-back"></i></button><button id="play" class="play-button" title="Play" aria-label="Play" disabled><i data-lucide="play"></i></button><button id="next" class="icon-button" title="Next paragraph" aria-label="Next paragraph" disabled><i data-lucide="skip-forward"></i></button><button id="stop" class="icon-button stop-button" title="Stop and reset" aria-label="Stop and reset" disabled><i data-lucide="square"></i></button></div><div class="seek-row"><span id="elapsed">0:00</span><input id="seek" type="range" min="0" max="1" value="0" aria-label="Chapter paragraph" disabled /><span id="duration">0:00</span></div></div><div class="playback-position"><span id="paragraph-position">-- / --</span><span>PARAGRAPHS</span></div></footer>
+  <footer class="playback-bar"><div class="playback-title"><span class="audio-mark"><i data-lucide="volume-2"></i></span><div><strong id="playing-title">Nothing queued</strong><span id="playback-status" role="status">Ready when you are</span></div></div><div class="playback-center"><div class="transport"><button id="previous" class="icon-button" title="Previous paragraph" aria-label="Previous paragraph" disabled><i data-lucide="skip-back"></i></button><button id="play" class="play-button" title="Play" aria-label="Play" disabled><i data-lucide="play"></i></button><button id="next" class="icon-button" title="Next paragraph" aria-label="Next paragraph" disabled><i data-lucide="skip-forward"></i></button><button id="stop" class="icon-button stop-button" title="Stop and reset" aria-label="Stop and reset" disabled><i data-lucide="square"></i></button><button id="next-chapter" class="icon-button" title="Next chapter" aria-label="Next chapter" disabled><i data-lucide="arrow-up-right"></i></button></div><div class="seek-row"><span id="elapsed">0:00</span><input id="seek" type="range" min="0" max="1" value="0" aria-label="Chapter paragraph" disabled /><span id="duration">0:00</span></div></div><div class="playback-position"><span id="paragraph-position">-- / --</span><span>PARAGRAPHS</span></div></footer>
   <input id="file-input" type="file" accept=".json,application/json" hidden />
 `;
 
@@ -33,6 +33,7 @@ let ready = false;
 let saveQueue = Promise.resolve();
 let lastHighlighted = -1;
 let loadGeneration = 0;
+let openingNext = false;
 const narrator = new Narrator(updatePlayback);
 
 function showError(text: string) {
@@ -63,8 +64,8 @@ function updatePlayback() {
   element('play').title = playing ? 'Pause' : 'Play';
   element<HTMLButtonElement>('play').disabled = !chapter;
   element<HTMLButtonElement>('stop').disabled = !chapter;
-  element<HTMLButtonElement>('previous').disabled = !chapter || current === 0;
-  element<HTMLButtonElement>('next').disabled = !chapter || current >= count - 1;
+  element<HTMLButtonElement>('previous').disabled = !chapter || !narrator.chunks.some(chunk => chunk.paragraphIndex < current);
+  element<HTMLButtonElement>('next').disabled = !chapter || !narrator.chunks.some(chunk => chunk.paragraphIndex > current);
   const status = { idle: 'Ready to listen', playing: 'Reading aloud', paused: 'Paused', completed: 'Chapter finished', error: 'Playback interrupted' }[narrator.state];
   element('playback-status').textContent = chapter ? status : 'Ready when you are';
   element('paragraph-position').textContent = chapter ? `${current + 1} / ${count}` : '-- / --';
@@ -98,6 +99,7 @@ function updatePlayback() {
 function renderChapter(next: Chapter | null, chunkIndex = 0) {
   ready = false;
   chapter = next;
+  element<HTMLButtonElement>('next-chapter').disabled = !chapter?.nextUrl || !isExtension;
   lastHighlighted = -1;
   element('chapter').hidden = !chapter;
   element('empty').hidden = Boolean(chapter);
@@ -105,8 +107,12 @@ function renderChapter(next: Chapter | null, chunkIndex = 0) {
   element('source').hidden = !chapter;
   element('paragraphs').replaceChildren();
   if (!chapter) { narrator.stop(); ready = true; return; }
+  const nextButton = element<HTMLButtonElement>('next-chapter');
+  nextButton.disabled = !chapter.nextUrl || !isExtension;
+  nextButton.title = chapter.nextUrl ? 'Open the next chapter in a new tab' : 'No next chapter link found. Re-extract this chapter to check for one.';
   const hostname = new URL(chapter.sourceUrl).hostname.replace(/^www\./, '');
-  const words = chapter.paragraphs.join(' ').split(/\s+/).length;
+  const readableParagraphs = chapter.paragraphs.filter(hasReadableText);
+  const words = readableParagraphs.join(' ').split(/\s+/).length;
   for (const id of ['chapter-title', 'sidebar-title', 'playing-title']) element(id).textContent = chapter.title;
   for (const id of ['sidebar-source', 'topbar-source', 'chapter-host']) element(id).textContent = hostname;
   element<HTMLAnchorElement>('source').href = chapter.sourceUrl;
@@ -115,6 +121,19 @@ function renderChapter(next: Chapter | null, chunkIndex = 0) {
   element('paragraph-count').textContent = `${chapter.paragraphs.length} paragraphs`;
   element('mode-label').textContent = chapter.mode === 'selection' ? 'SELECTED TEXT' : 'WEB CHAPTER';
   chapter.paragraphs.forEach((text, index) => {
+    if (!hasReadableText(text)) {
+      const separator = document.createElement('div');
+      separator.className = 'story-separator';
+      separator.dataset.paragraph = String(index);
+      separator.setAttribute('role', 'separator');
+      separator.setAttribute('aria-label', 'Story break');
+      const ornament = document.createElement('span');
+      ornament.setAttribute('aria-hidden', 'true');
+      ornament.textContent = '• • •';
+      separator.append(ornament);
+      element('paragraphs').append(separator);
+      return;
+    }
     const paragraph = document.createElement('p');
     paragraph.textContent = text;
     paragraph.dataset.paragraph = String(index);
@@ -130,6 +149,19 @@ function renderChapter(next: Chapter | null, chunkIndex = 0) {
   narrator.load(chapter, chunkIndex);
   ready = true;
   updatePlayback();
+}
+
+async function openNextChapter() {
+  if (!chapter?.nextUrl || !isExtension || openingNext) return;
+  openingNext = true;
+  const button = element<HTMLButtonElement>('next-chapter');
+  button.disabled = true;
+  try {
+    await chrome.tabs.create({ url: chapter.nextUrl, active: true });
+  } finally {
+    openingNext = false;
+    button.disabled = !chapter?.nextUrl || !isExtension;
+  }
 }
 
 function applyPreferences() {
@@ -170,6 +202,7 @@ element('play').addEventListener('click', () => {
 element('stop').addEventListener('click', () => narrator.stop());
 element('previous').addEventListener('click', () => narrator.seekParagraph(paragraphIndex() - 1));
 element('next').addEventListener('click', () => narrator.seekParagraph(paragraphIndex() + 1));
+element('next-chapter').addEventListener('click', () => void openNextChapter().catch(error => showError(error instanceof Error ? error.message : 'Could not open the next chapter.')));
 element('seek').addEventListener('input', event => narrator.seekParagraph(Number((event.target as HTMLInputElement).value)));
 element('rate').addEventListener('input', event => {
   preferences.rate = Number((event.target as HTMLInputElement).value);

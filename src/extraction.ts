@@ -1,4 +1,5 @@
 import { Readability } from '@mozilla/readability';
+import { hasReadableText } from './model';
 import type { Chapter } from './model';
 
 function isUrlHeavy(text: string, block?: Element, sourceUrl?: string): boolean {
@@ -21,6 +22,24 @@ function isUrlHeavy(text: string, block?: Element, sourceUrl?: string): boolean 
   const urls = remaining.match(/(?:https?:\/\/|www\.)[^\s<>"']+/gi) || [];
   const urlLength = urls.reduce((sum, url) => sum + url.length, 0);
   return (linkedLength + urlLength) / length >= 0.5;
+}
+
+function findNextUrl(document: Document, sourceUrl: string): string | undefined {
+  const source = new URL(sourceUrl);
+  const links = [
+    ...Array.from(document.querySelectorAll<HTMLAnchorElement>('a[rel~="next"][href]')),
+    ...Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).filter(anchor => !anchor.rel.split(/\s+/).includes('next')),
+  ];
+  for (const anchor of links) {
+    const label = [anchor.getAttribute('aria-label'), anchor.title, anchor.textContent]
+      .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    if (!anchor.rel.split(/\s+/).includes('next') && !/\bnext(?:\s+chapter)?\b|\bchapter\s+next\b|\bolder(?:\s+chapter)?\b/i.test(label)) continue;
+    try {
+      const candidate = new URL(anchor.href, sourceUrl);
+      if (['http:', 'https:'].includes(candidate.protocol) && candidate.origin === source.origin && candidate.href !== source.href) return candidate.href;
+    } catch { continue; }
+  }
+  return undefined;
 }
 
 export function extractChapter(document: Document, mode: Chapter['mode']): Chapter {
@@ -48,8 +67,10 @@ export function extractChapter(document: Document, mode: Chapter['mode']): Chapt
     }
   }
   paragraphs = paragraphs.filter(text => !isUrlHeavy(text));
-  if (!paragraphs.length) throw new Error('No readable paragraphs remain after filtering URL-heavy text.');
-  if (mode === 'article' && paragraphs.join(' ').length < 80) throw new Error('Not enough chapter text found. Try selecting the text instead.');
+  const readableParagraphs = paragraphs.filter(hasReadableText);
+  if (!readableParagraphs.length) throw new Error('No readable paragraphs remain after filtering URL-heavy text.');
+  if (mode === 'article' && readableParagraphs.join(' ').length < 80) throw new Error('Not enough chapter text found. Try selecting the text instead.');
   if (paragraphs.join('').length > 1_000_000) throw new Error('This chapter is too large. Select a smaller section.');
-  return { id: crypto.randomUUID(), sourceUrl, title, paragraphs, extractedAt: Date.now(), mode };
+  const nextUrl = findNextUrl(document, sourceUrl);
+  return { id: crypto.randomUUID(), sourceUrl, title, paragraphs, extractedAt: Date.now(), mode, ...(nextUrl ? { nextUrl } : {}) };
 }

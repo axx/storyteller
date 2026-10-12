@@ -58,15 +58,39 @@ test('preferences persist and imported text cannot inject markup', async ({ page
   await expect(page.locator('#notice')).toHaveText('This file is not a valid StoryTeller chapter.');
 });
 
+test('renders separator-only paragraphs as visual story breaks and skips them in speech', async ({ page, context }) => {
+  await mockSpeech(context);
+  await page.goto('/');
+  await page.locator('#file-input').setInputFiles({
+    name: 'chapter.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({
+      ...demoChapter,
+      paragraphs: ['Before the break.', '<<<•>>>', 'After the break.'],
+    })),
+  });
+  await expect(page.getByRole('separator', { name: 'Story break' })).toBeVisible();
+  await expect(page.locator('.story-separator')).not.toContainText('<<<•>>>');
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.evaluate(() => (window as unknown as { __spoken: { onend?: () => void }[] }).__spoken[0].onend?.());
+  const spoken = await page.evaluate(() => (window as unknown as { __spoken: { text: string }[] }).__spoken.map(item => item.text));
+  expect(spoken).toEqual(['Before the break.', 'After the break.']);
+});
+
 test('desktop and mobile layouts fit and expose working controls', async ({ page, context }) => {
   await mockSpeech(context);
   await page.goto('/?demo');
   await expect(page.locator('#chapter-title')).toBeVisible();
+  await expect(page.locator('.sidebar .brand')).toHaveText('StoryTeller');
+  await expect(page.locator('#chapter-loader')).toHaveCount(0);
+  await expect(page.locator('#next-chapter')).toBeVisible();
+  await expect(page.locator('#next-chapter').locator('xpath=..')).toHaveClass(/transport/);
   await page.screenshot({ path: 'test-results/reader-desktop.png', fullPage: true });
-  for (const width of [1440, 1024, 768, 390, 320]) {
+  for (const width of [1440, 1024, 900, 768, 651, 650, 390, 320]) {
     await page.setViewportSize({ width, height: 850 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next chapter' })).toBeVisible();
     const title = await page.locator('#chapter-title').boundingBox();
     const paragraph = await page.locator('[data-paragraph="0"]').boundingBox();
     expect(title!.y + title!.height).toBeLessThan(paragraph!.y);
@@ -83,6 +107,7 @@ test('empty reader and popup show recoverable errors', async ({ page, context })
   await expect(page.getByRole('heading', { name: 'No chapter yet' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeDisabled();
   await page.goto('/popup.html');
+  await expect(page.locator('.popup .brand')).toHaveText('StoryTeller');
   await page.getByRole('button', { name: 'Read current page' }).click();
   await expect(page.locator('#popup-error')).toHaveText('Load the built extension in Chrome to read browser tabs.');
   await page.screenshot({ path: 'test-results/popup.png' });

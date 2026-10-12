@@ -23,14 +23,23 @@ function setup() {
 describe('chapter extraction', () => {
   it('extracts article text without modifying the original document', () => {
     const source = document;
-    source.documentElement.innerHTML = `<head><title>A quiet harbor</title></head><body><nav>Log in</nav><article><h1>A quiet harbor</h1>${Array.from({ length: 6 }, () => '<p>The harbor was quiet that morning. Mara walked along the seawall, listening to the water beneath the old wooden pier.</p>').join('')}</article></body>`;
+    source.documentElement.innerHTML = `<head><title>A quiet harbor</title></head><body><nav>Log in</nav><article><h1>A quiet harbor</h1>${Array.from({ length: 6 }, () => '<p>The harbor was quiet that morning. Mara walked along the seawall, listening to the water beneath the old wooden pier.</p>').join('')}<a rel="next" href="/novel/2">Continue</a></article></body>`;
     const before = source.documentElement.outerHTML;
     const result = extractChapter(source, 'article');
     expect(result.title).toBe('A quiet harbor');
     expect(result.paragraphs).toHaveLength(6);
     expect(result.paragraphs.join(' ')).not.toContain('Log in');
+    expect(result.nextUrl).toBe('https://example.com/novel/2');
     expect(source.documentElement.outerHTML).toBe(before);
     expect(isChapter(result)).toBe(true);
+  });
+
+  it('finds a same-site next chapter link and ignores external navigation', () => {
+    document.documentElement.innerHTML = `<head><title>A quiet harbor</title></head><body><article><h1>A quiet harbor</h1>${Array.from({ length: 6 }, () => '<p>The harbor was quiet that morning. Mara walked along the seawall, listening to the water beneath the old wooden pier.</p>').join('')}<a href="https://other.example/next">Next chapter</a><a href="/novel/2" aria-label="Next chapter">Continue</a></article></body>`;
+    const result = extractChapter(document, 'article');
+    expect(result.nextUrl).toBe('https://example.com/novel/2');
+    expect(isChapter({ ...result, nextUrl: 'https://other.example/next' })).toBe(false);
+    expect(isChapter({ ...result, nextUrl: 'javascript:alert(1)' })).toBe(false);
   });
 
   it('rejects empty selections and unsafe chapter data', () => {
@@ -62,6 +71,18 @@ describe('chapter extraction', () => {
     selection.removeAllRanges();
   });
 
+  it('preserves symbol-only separators while retaining non-Latin story text', () => {
+    document.body.textContent = '<<<•>>>\n\n———\n\n終わり。';
+    const range = document.createRange();
+    range.selectNodeContents(document.body);
+    const selection = document.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const result = extractChapter(document, 'selection');
+    expect(result.paragraphs).toEqual(['<<<•>>>', '———', '終わり。']);
+    selection.removeAllRanges();
+  });
+
   it('filters linked promotional paragraphs while preserving linked story prose', () => {
     const story = 'The harbor was quiet that morning. Mara walked along the seawall, listening to the water beneath the old wooden pier.';
     const incidental = 'Mara found <a href="https://example.com/map">a map</a> in the drawer, beside an old compass and the letters her grandfather had written before leaving for the northern coast.';
@@ -90,6 +111,16 @@ describe('chunked narration', () => {
     const chunks = makeChunks(['A long story '.repeat(100) + 'word'.repeat(200), 'The end.']);
     expect(chunks.every(chunk => chunk.text.length <= 240)).toBe(true);
     expect(chunks.at(-1)?.paragraphIndex).toBe(1);
+  });
+
+  it('skips separator-only paragraphs and navigates to the next readable paragraph', () => {
+    const { narrator } = setup();
+    narrator.load({ ...chapter, paragraphs: ['<<<•>>>', 'First story paragraph.', '———', '終わり。'] });
+    expect(narrator.chunks.map(chunk => chunk.paragraphIndex)).toEqual([1, 3]);
+    narrator.seekParagraph(2);
+    expect(narrator.chunkIndex).toBe(1);
+    narrator.seekParagraph(2);
+    expect(narrator.chunkIndex).toBe(0);
   });
 
   it('advances and completes without losing the saved position', () => {
