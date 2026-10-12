@@ -1,4 +1,4 @@
-# Folio
+# StoryTeller
 
 A Chrome Manifest V3 extension that extracts web novel chapters and reads them aloud in a dedicated player tab. Built with TypeScript, Vite, Mozilla Readability, and the browser's Web Speech API. No backend or native companion app.
 
@@ -14,8 +14,8 @@ npm run build
 1. Open `chrome://extensions` in Chrome.
 2. Enable **Developer mode**.
 3. Choose **Load unpacked** and select this project's `dist` directory.
-4. Pin **Folio - Web Novel Reader** in the extensions menu.
-5. Open a novel chapter, click Folio, and choose **Read current page**.
+4. Pin **StoryTeller - Web Novel Reader** in the extensions menu.
+5. Open a novel chapter, click StoryTeller, and choose **Read current page**.
 6. Review the extracted text in the reader and press **Play**.
 
 If extraction includes navigation or misses the chapter, select the desired text on the source page and choose **Read selected text** instead. After rebuilding, reload the extension in `chrome://extensions` and reload any existing player tab.
@@ -69,7 +69,7 @@ Vite bundles the player, popup, and module service worker. esbuild produces a se
 
 - Keep the player tab open during narration. Computer sleep, browser tab freezing/discarding, and browser speech-engine bugs can interrupt playback.
 - Pause cancels the current utterance for consistent recovery. Resume replays the current chunk. Voice/speed changes also restart that chunk. No word-exact resume is promised.
-- Voices and quality depend on your system and browser. Voices marked **Online voice** may send text to the voice provider. The default voice's locality is not guaranteed. Folio itself has no server, telemetry, or cloud account.
+- Voices and quality depend on your system and browser. Voices marked **Online voice** may send text to the voice provider. The default voice's locality is not guaranteed. StoryTeller itself has no server, telemetry, or cloud account.
 - Readability is a general article extractor, not a site-specific novel parser. Inspect the extracted text before listening. Content not loaded into the page, restricted browser pages, and inaccessible embedded frames may not be extractable.
 - URL filtering is a text-density heuristic, not a blanket Patreon or promotional-content blocklist. Selected-text mode sees visible text only, not link destinations. Filtering applies during new extraction; re-extract previously saved chapters to apply it. Imported chapter JSON is not filtered.
 - No automatic next-chapter loading, chapter library, or cloud voice provider in this version.

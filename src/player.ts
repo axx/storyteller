@@ -199,7 +199,7 @@ element('file-input').addEventListener('change', async event => {
   try {
     if (file.size > 2_000_000) throw new Error('Choose a chapter file smaller than 2 MB.');
     const imported: unknown = JSON.parse(await file.text());
-    if (!isChapter(imported)) throw new Error('This file is not a valid Folio chapter.');
+    if (!isChapter(imported)) throw new Error('This file is not a valid StoryTeller chapter.');
     const next = { ...imported, id: crypto.randomUUID() };
     await saveChapter(next);
     renderChapter(next);

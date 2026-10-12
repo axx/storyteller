@@ -55,7 +55,7 @@ test('preferences persist and imported text cannot inject markup', async ({ page
   await expect(page.locator('#chapter-title')).toHaveText('<img src=x onerror=alert(1)>');
   await expect(page.locator('#paragraphs script, #chapter-title img')).toHaveCount(0);
   await page.locator('#file-input').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
-  await expect(page.locator('#notice')).toHaveText('This file is not a valid Folio chapter.');
+  await expect(page.locator('#notice')).toHaveText('This file is not a valid StoryTeller chapter.');
 });
 
 test('desktop and mobile layouts fit and expose working controls', async ({ page, context }) => {
