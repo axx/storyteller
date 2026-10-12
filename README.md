@@ -26,8 +26,8 @@ If extraction includes navigation or misses the chapter, select the desired text
 - Selected-text fallback and safe plain-text rendering.
 - URL-heavy paragraph filtering: omit paragraphs where at least half of the non-whitespace text is explicit HTTP/HTTPS or www URLs. Full-page extraction also counts HTTP/HTTPS hyperlink labels, without double-counting visible URLs inside links. Longer prose with incidental links is preserved.
 - Separator-only paragraphs without Unicode letters or numbers are shown as visual story breaks and skipped during narration, including in imported or previously saved chapters.
-- Dedicated player tab independent of the popup and source page.
-- Same-site next-chapter discovery. The footer's **Next chapter** control opens the discovered link in a new browser tab; it does not automatically extract or load that chapter.
+- Dedicated player tab independent of the popup and source page. After the chapter loads successfully, the source tab closes; its original-page link remains available in the reader.
+- Same-site next-chapter discovery. **Next chapter** requests access to that site when needed, extracts the linked chapter in a temporary background tab, and loads its contents into the existing reader.
 - Play, pause, stop/reset, paragraph navigation, and paragraph highlighting.
 - Voice selection, speed control, light/dark theme, and text size.
 - Local storage of one chapter snapshot, preferences, and chunk-level progress.
@@ -65,7 +65,7 @@ Playwright starts its own Vite server if one is not already running on port 5173
 
 The player, not the service worker or popup, owns speech playback. The service worker may suspend without losing the player's state. Extracted chapters are snapshots, so source-page navigation cannot change the queued text. Next-chapter discovery uses a same-site `rel="next"` link or a clearly labeled next/older link when available. Re-extract a chapter saved before this feature to discover its next link. The **Next chapter** control opens that URL in a separate browser tab; use the extension action there to extract it.
 
-Vite bundles the player, popup, and module service worker. esbuild produces a separate, self-contained content-script IIFE. Scripts, fonts, and icons are bundled locally; the extension does not load executable code from a CDN. Only `activeTab`, `scripting`, and `storage` permissions are requested.
+Vite bundles the player, popup, and module service worker. esbuild produces a separate, self-contained content-script IIFE. Scripts, fonts, and icons are bundled locally; the extension does not load executable code from a CDN. The extension requests `activeTab`, `scripting`, and `storage` permissions at install. It requests optional access to a novel's site only when **Next chapter** is used, and only for the site containing that chapter.
 
 ## Limitations And Privacy
 
@@ -74,7 +74,7 @@ Vite bundles the player, popup, and module service worker. esbuild produces a se
 - Voices and quality depend on your system and browser. Voices marked **Online voice** may send text to the voice provider. The default voice's locality is not guaranteed. StoryTeller itself has no server, telemetry, or cloud account.
 - Readability is a general article extractor, not a site-specific novel parser. Inspect the extracted text before listening. Content not loaded into the page or restricted browser pages may not be extractable.
 - URL filtering is a text-density heuristic, not a blanket Patreon or promotional-content blocklist. Selected-text mode sees visible text only, not link destinations. URL filtering applies during new extraction; re-extract previously saved chapters to apply it. Imported chapter JSON is not URL-filtered, though separator-only paragraphs appear as visual story breaks and are skipped during narration.
-- Next-chapter discovery depends on recognizable links. The link opens in a new browser tab and must be extracted separately with the extension action.
+- Next-chapter discovery depends on recognizable links. Loading one requires approval for that novel's site; if the site blocks extraction or the page does not contain a readable chapter, the current chapter remains open.
 - No chapter library or cloud voice provider in this version.
 - Duration labels are estimates based on word count and selected speed, not measured audio timestamps.
 - Chapter text and preferences remain in Chrome's local extension storage, not sync storage. The most recent chapter remains saved until replaced, Chrome clears its data, or the extension is removed.

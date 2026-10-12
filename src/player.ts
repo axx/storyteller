@@ -3,6 +3,7 @@ import { Narrator } from './narration';
 import { getSaved, isExtension, saveChapter, writeStorage } from './storage';
 import { defaultPreferences, hasReadableText, isChapter } from './model';
 import type { Chapter, Preferences } from './model';
+import { request } from './protocol';
 import type { PlayerStatus } from './protocol';
 
 let chapter: Chapter | null = null;
@@ -88,7 +89,7 @@ function renderChapter(next: Chapter | null, chunkIndex = 0) {
   if (!chapter) { narrator.stop(); ready = true; return; }
   const nextButton = element<HTMLButtonElement>('next-chapter');
   nextButton.disabled = !chapter.nextUrl || !isExtension;
-  nextButton.title = chapter.nextUrl ? 'Open the next chapter in a new tab' : 'No next chapter link found. Re-extract this chapter to check for one.';
+  nextButton.title = chapter.nextUrl ? 'Load the next chapter in StoryTeller' : 'No next chapter link found. Re-extract this chapter to check for one.';
   const hostname = new URL(chapter.sourceUrl).hostname.replace(/^www\./, '');
   const readableParagraphs = chapter.paragraphs.filter(hasReadableText);
   const words = readableParagraphs.join(' ').split(/\s+/).length;
@@ -136,7 +137,13 @@ async function openNextChapter() {
   const button = element<HTMLButtonElement>('next-chapter');
   button.disabled = true;
   try {
-    await chrome.tabs.create({ url: chapter.nextUrl, active: true });
+    const nextUrl = new URL(chapter.nextUrl);
+    const originPattern = `${nextUrl.protocol}//${nextUrl.hostname}/*`;
+    if (!await chrome.permissions.request({ origins: [originPattern] })) {
+      throw new Error('Allow StoryTeller to read this site to load the next chapter.');
+    }
+    const result = await request({ target: 'worker', type: 'OPEN_NEXT_CHAPTER' });
+    if (!result.ok) throw new Error(result.error || 'Could not load the next chapter.');
   } finally {
     openingNext = false;
     button.disabled = !chapter?.nextUrl || !isExtension;
@@ -170,7 +177,11 @@ async function reloadChapter() {
   const generation = ++loadGeneration;
   const saved = await getSaved();
   if (generation !== loadGeneration) return;
-  if (saved.chapter?.id !== chapter?.id) { showError(''); renderChapter(saved.chapter, saved.chunkIndex); }
+  if (saved.chapter?.id !== chapter?.id) {
+    showError('');
+    renderChapter(saved.chapter, saved.chunkIndex);
+    window.scrollTo(0, 0);
+  }
 }
 
 element('play').addEventListener('click', () => {
