@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { extractChapter } from './extraction';
 import { Narrator, makeChunks } from './narration';
 import { isChapter } from './model';
+import { readStorage, writeStorage } from './storage';
 import type { Chapter } from './model';
 
 const chapter: Chapter = {
@@ -11,6 +12,17 @@ const chapter: Chapter = {
   paragraphs: ['First sentence. Second sentence.', 'Another paragraph.'],
   extractedAt: 1, mode: 'article',
 };
+
+describe('web storage', () => {
+  it('writes new data under the StoryTeller storage key', async () => {
+    localStorage.removeItem('storyteller');
+
+    await writeStorage({ theme: 'dark' });
+
+    expect(localStorage.getItem('storyteller')).toBe(JSON.stringify({ theme: 'dark' }));
+    await expect(readStorage()).resolves.toEqual({ theme: 'dark' });
+  });
+});
 
 function setup() {
   const spoken: SpeechSynthesisUtterance[] = [];
